@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Invoice Portofolio</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f6f9; }
+        .sidebar { min-height: 100vh; background: #343a40; color: white; }
+        .nav-link { color: rgba(255,255,255,.8); cursor: pointer; }
+        .nav-link:hover, .nav-link.active { color: white; background: #495057; }
+        .card { border: none; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        #app-container { display: none; } /* Hidden by default */
+    </style>
+</head>
+<body>
+
+    <!-- HALAMAN LOGIN (SIMULASI) -->
+    <div class="container d-flex justify-content-center align-items-center vh-100" id="login-screen">
+        <div class="card p-4 shadow" style="width: 400px;">
+            <h3 class="text-center mb-4">Login Sistem Invoice</h3>
+            <p class="text-muted text-center">Pilih Role untuk simulasi:</p>
+            <div class="d-grid gap-2">
+                <button class="btn btn-primary" onclick="login('sales')">Sales (Buat Invoice)</button>
+                <button class="btn btn-success" onclick="login('finance')">Finance (Approve)</button>
+                <button class="btn btn-warning text-dark" onclick="login('gudang')">Gudang (Kirim Barang)</button>
+                <button class="btn btn-info text-dark" onclick="login('customer')">Customer (Bayar)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HALAMAN UTAMA APLIKASI -->
+    <div class="container-fluid" id="app-container">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-2 sidebar p-3">
+                <h4 class="mb-4">Invoice App</h4>
+                <p class="text-white-50">Login sebagai: <strong id="user-role-display" class="text-white"></strong></p>
+                <hr>
+                <ul class="nav flex-column">
+                    <li class="nav-item"><a class="nav-link active" onclick="showPage('dashboard')">Dashboard</a></li>
+                    <li class="nav-item" id="menu-create" style="display:none;"><a class="nav-link" onclick="showPage('create')">Buat Invoice</a></li>
+                    <li class="nav-item" id="menu-pay" style="display:none;"><a class="nav-link" onclick="showPage('pay')">Bayar Invoice</a></li>
+                    <li class="nav-item mt-5"><a class="nav-link text-danger" onclick="logout()">Logout</a></li>
+                </ul>
+            </div>
+
+            <!-- Content Area -->
+            <div class="col-md-10 p-4">
+                
+                <!-- Dashboard Page -->
+                <div id="page-dashboard">
+                    <h2>Dashboard Invoice</h2>
+                    <div class="row mt-4">
+                        <div class="col-md-3">
+                            <div class="card bg-primary text-white p-3">
+                                <h5>Total Invoice</h5>
+                                <h3 id="total-invoice">0</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-success text-white p-3">
+                                <h5>Terbayar</h5>
+                                <h3 id="total-paid">0</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card mt-4 p-3">
+                        <h5>Daftar Invoice</h5>
+                        <table class="table table-striped mt-2">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Customer</th>
+                                    <th>Item</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="invoice-table-body">
+                                <!-- Data will be injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Create Invoice Page (Sales Only) -->
+                <div id="page-create" style="display:none;">
+                    <h2>Buat Invoice Baru</h2>
+                    <div class="card p-4 mt-3">
+                        <form onsubmit="createInvoice(event)">
+                            <div class="mb-3">
+                                <label>Nama Customer</label>
+                                <input type="text" id="input-customer" class="form-control" required placeholder="Contoh: PT Maju Jaya">
+                            </div>
+                            <div class="mb-3">
+                                <label>Item Barang</label>
+                                <input type="text" id="input-item" class="form-control" required placeholder="Contoh: Laptop Asus">
+                            </div>
+                            <div class="mb-3">
+                                <label>Harga (Rp)</label>
+                                <input type="number" id="input-price" class="form-control" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Simpan Invoice</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Pay Invoice Page (Customer Only) -->
+                <div id="page-pay" style="display:none;">
+                    <h2>Bayar Invoice</h2>
+                    <p class="text-muted">Invoice yang harus dibayar oleh Anda:</p>
+                    <div class="card p-3 mt-3">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Item</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pay-table-body">
+                                <!-- Data injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // --- 1. DATA DUMMY (MOCK DATA) ---
+        const initialData = [
+            { id: 101, customer: "Budi Santoso", item: "Sepatu Nike", price: 1500000, status: "Draft" },
+            { id: 102, customer: "Budi Santoso", item: "Kaos Polos", price: 100000, status: "Approved" },
+            { id: 103, customer: "Siti Aminah", item: "Tas Ransel", price: 350000, status: "Shipped" }
+        ];
+
+        let invoices = JSON.parse(localStorage.getItem('invoices')) || initialData;
+        let currentUser = null;
+
+        // --- 2. FUNGSI UTAMA ---
+        function saveData() {
+            localStorage.setItem('invoices', JSON.stringify(invoices));
+            renderDashboard();
+        }
+
+        function login(role) {
+            currentUser = role;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-container').style.display = 'block';
+            document.getElementById('user-role-display').innerText = role.toUpperCase();
+
+            // Atur Menu Berdasarkan Role
+            document.getElementById('menu-create').style.display = (role === 'sales') ? 'block' : 'none';
+            document.getElementById('menu-pay').style.display = (role === 'customer') ? 'block' : 'none';
+
+            showPage('dashboard');
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('app-container').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'flex';
+        }
+
+        function showPage(pageId) {
+            document.getElementById('page-dashboard').style.display = 'none';
+            document.getElementById('page-create').style.display = 'none';
+            document.getElementById('page-pay').style.display = 'none';
+            document.getElementById('page-' + pageId).style.display = 'block';
+
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+
+            if(pageId === 'dashboard') renderDashboard();
+            if(pageId === 'pay') renderPayPage();
+        }
+
+        // --- 3. LOGIC PER ROLE ---
+        function createInvoice(e) {
+            e.preventDefault();
+            const customer = document.getElementById('input-customer').value;
+            const item = document.getElementById('input-item').value;
+            const price = parseInt(document.getElementById('input-price').value);
+
+            const newInvoice = {
+                id: Math.floor(Math.random() * 1000) + 100,
+                customer: customer,
+                item: item,
+                price: price,
+                status: "Draft"
+            };
+
+            invoices.push(newInvoice);
+            saveData();
+            alert("Invoice berhasil dibuat!");
+            e.target.reset();
+            showPage('dashboard');
+        }
+
+        function approveInvoice(id) {
+            const inv = invoices.find(i => i.id === id);
+            if (inv) {
+                inv.status = "Approved";
+                saveData();
+            }
+        }
+
+        function shipInvoice(id) {
+            const inv = invoices.find(i => i.id === id);
+            if (inv) {
+                inv.status = "Shipped";
+                saveData();
+            }
+        }
+
+        function payInvoice(id) {
+            const inv = invoices.find(i => i.id === id);
+            if (inv) {
+                inv.status = "Paid";
+                saveData();
+            }
+        }
+
+        // --- 4. RENDER UI (LENGKAP) ---
+        function renderDashboard() {
+            const tbody = document.getElementById('invoice-table-body');
+            tbody.innerHTML = '';
+
+            let displayData = invoices;
+            
+            // Filter data berdasarkan role
+            if (currentUser === 'customer') {
+                displayData = invoices.filter(i => i.customer === currentUser);
+            }
+
+            // --- BAGIAN STATISTIK (YANG DITANYAKAN) ---
+            document.getElementById('total-invoice').innerText = displayData.length;
+            document.getElementById('total-paid').innerText = displayData.filter(i => i.status === 'Paid').length;
+            // -----------------------------------------
+
+            displayData.forEach(inv => {
+                let badgeClass = 'bg-secondary';
+                if(inv.status === 'Draft') badgeClass = 'bg-warning text-dark';
+                if(inv.status === 'Approved') badgeClass = 'bg-info text-dark';
+                if(inv.status === 'Shipped') badgeClass = 'bg-primary';
+                if(inv.status === 'Paid') badgeClass = 'bg-success';
+
+                let actionBtn = '';
+                
+                // Logika Tombol Aksi Berdasarkan Role & Status
+                if (currentUser === 'finance' && inv.status === 'Draft') {
+                    actionBtn = `<button class="btn btn-sm btn-success" onclick="approveInvoice(${inv.id})">Approve</button>`;
+                } else if (currentUser === 'gudang' && inv.status === 'Approved') {
+                    actionBtn = `<button class="btn btn-sm btn-warning text-dark" onclick="shipInvoice(${inv.id})">Kirim</button>`;
+                } else if (currentUser === 'customer' && inv.status === 'Shipped') {
+                    actionBtn = `<button class="btn btn-sm btn-primary" onclick="payInvoice(${inv.id})">Bayar</button>`;
+                }
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${inv.id}</td>
+                        <td>${inv.customer}</td>
+                        <td>${inv.item}</td>
+                        <td>Rp ${inv.price.toLocaleString('id-ID')}</td>
+                        <td><span class="badge ${badgeClass}">${inv.status}</span></td>
+                        <td>${actionBtn}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function renderPayPage() {
+            const tbody = document.getElementById('pay-table-body');
+            tbody.innerHTML = '';
+            
+            const myInvoices = invoices.filter(i => i.customer === currentUser);
+            
+            if (myInvoices.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">Tidak ada invoice untuk dibayar</td></tr>';
+                return;
+            }
+
+            myInvoices.forEach(inv => {
+                let badgeClass = 'bg-secondary';
+                if(inv.status === 'Shipped') badgeClass = 'bg-warning text-dark';
+                if(inv.status === 'Paid') badgeClass = 'bg-success';
+
+                let actionBtn = '';
+                if (inv.status === 'Shipped') {
+                    actionBtn = `<button class="btn btn-sm btn-primary" onclick="payInvoice(${inv.id})">Bayar Sekarang</button>`;
+                } else if (inv.status === 'Paid') {
+                    actionBtn = `<span class="text-success fw-bold">Lunas</span>`;
+                }
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${inv.id}</td>
+                        <td>${inv.item}</td>
+                        <td>Rp ${inv.price.toLocaleString('id-ID')}</td>
+                        <td><span class="badge ${badgeClass}">${inv.status}</span></td>
+                        <td>${actionBtn}</td>
+                    </tr>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>
